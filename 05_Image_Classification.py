@@ -33,8 +33,8 @@ db = DataBlock(blocks=(ImageBlock, CategoryBlock),
                get_items = get_image_files,
                splitter = RandomSplitter(valid_pct=0.2, seed=42),
                get_y = label_func,
-               item_tfms=Resize(446),
-               batch_tfms=aug_transforms(size=244, min_scale=0.75))
+               item_tfms=Resize(460),
+               batch_tfms=aug_transforms(size=224, min_scale=0.75))
 # db.summary(path/'images')
 dls = db.dataloaders(path/'images', shuffle=True)
 

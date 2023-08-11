@@ -3,7 +3,7 @@
 import fastbook
 fastbook.setup_book()
 from fastbook import *
-from fastai.vision.widgets import *
+from fastai.vision.all import *
 import fastai
 print(f'fastai version: {fastai.__version__}')
 
@@ -77,12 +77,64 @@ dls.show_batch(nrows=1, ncols=3)
 learn = vision_learner(dls, resnet18)
 learn.model.cuda()
 x, y = dls.train.one_batch()
-activations = learn.model(x)
-print(f'activations.shape: {activations.shape}')
-print(f'activations[0]: {activations[0]}')
+activs = learn.model(x)
+print(f'''type(x): {type(x)},
+      type(activs): {type(activs)},
+      type(y): {type(y)}''')
+print(f'''x.shape: {x.shape},
+      activs.shape: {activs.shape},
+      y.shape: {y.shape}''')
+# print(f'''activs: {activs},
+#       y: {y}''')
+# print(f'activs[0]: {activs[0]}')
 
-def binary_cross_entropy(activations, targets):
-  s = torch.sigmoid(activations)
-  return -torch.where(targets == 1, 1-activations, activations).log().mean()
+# def binary_cross_entropy(activs, targets):
+#   s = torch.sigmoid(activs)
+#   return -torch.where(targets == 1, s, 1-s).log().mean()
+# binary_cross_entropy(torch.Tensor(activs), torch.Tensor(y))
+
+loss = F.binary_cross_entropy_with_logits(torch.Tensor(activs), torch.Tensor(y))
+print(f'loss: {loss}')
+
+#%% accuracy metric
+# `argmax`` gets us the index of the largest value for each of the inner-most lists.
+# This method works for getting predictions for single category variables like in
+# pet breed or mnist classification
+# print(f' activs[0:3]: {activs[0:3]}, argmax : {activs[0:3].argmax(dim=-1)}')
+
+# accuracy for multi-category variables
+def accuracy_multi(activs, targets, threshold=0.5, sigmoid=True):
+  if sigmoid: activs = activs.sigmoid()
+  print(f'filtered activations: {(activs>threshold).float().sum()}')
+  print(f'1s in targets: {targets.sum()}')
+  targets = targets.bool()
+  return ((activs > threshold) == targets).float().mean()
+
+#%% fine tune
+learn = vision_learner(dls, resnet50, metrics=partial(accuracy_multi, threshold=0.2))
+learn.fine_tune(3, base_lr=3e-3, freeze_epochs=4)
+
+#%% check metrics with different thresholds
+learn.metrics = partial(accuracy_multi, threshold=0.005)
+print(f'loss at threshold 0.005: {learn.validate()}')
+learn.metrics = partial(accuracy_multi, threshold=0.1)
+print(f'loss at threshold 0.1: {learn.validate()}')
+learn.metrics = partial(accuracy_multi, threshold=0.4)
+print(f'loss at threshold 0.4: {learn.validate()}')
+learn.metrics = partial(accuracy_multi, threshold=0.99)
+print(f'loss at threshold 0.99: {learn.validate()}')
+
+#%% pick the best threshold
+predictions, targets = learn.get_preds()
+accuracies = accuracy_multi(predictions[:3], targets[:3], threshold=0.9, sigmoid=False)
+xs = torch.linspace(0.05, 0.95, 29)
+accuracies = [accuracy_multi(predictions, targets, threshold=i, sigmoid=False) for i in xs]
+# print(f'accuracies: {accuracies}')
+plt.plot(xs, accuracies)
 
 # %%
+print(len(predictions), predictions.shape, len(targets), targets.shape, len(predictions[:3]))
+print(predictions[:3], predictions[:3] > 0.5)
+print(f'threshold 0.005 - predictions: {(predictions[:3] > 0.005).float().sum(dim=-1)}, targets: {targets[0:3].sum(dim=-1)}')
+print(f'threshold 0.4 - predictions: {(predictions[:3] > 0.4).float().sum(dim=-1)}, targets: {targets[0:3].sum(dim=-1)}')
+print(f'threshold 0.99 - predictions: {(predictions[:3] > 0.99).float().sum(dim=-1)}, targets: {targets[0:3].sum(dim=-1)}')
