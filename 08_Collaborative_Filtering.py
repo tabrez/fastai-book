@@ -28,7 +28,6 @@ BASE_DIR = "/home/tabrez/MEGA/MEGA/code/fastai-book"
 def source(fn):
     pydoc.pager(pydoc.render_doc(fn))
 
-
 # %% download the data
 path = untar_data(URLs.ML_100k)
 print("path", path, path.ls())
