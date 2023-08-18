@@ -60,18 +60,22 @@ db = DataBlock(blocks=(ImageBlock, MultiCategoryBlock),
 
 dls = db.dataloaders(df)
 
-#%% inspect dls
-print(len(dls.items))
-dlsone = dls.one_batch()
-print(len(dlsone), dlsone[0].shape)
-dlstrainone = dls.train.one_batch()
-print(len(dlstrainone), dlstrainone[0].shape)
+#%%
+def inspect_dls(dls):
+  print(f'type(items): {type(dls.items)}, len(items): {len(dls.items)}')
+  x, y = dls.one_batch()
+  print(f'first batch -> x.shape: {x.shape}')
+  print(f'first batch -> y.shape: {y.shape}')
+  print(f'''\nlen(train): {len(dls.train)},\
+        \nlen(valid): {len(dls.valid)},\
+        \nlen(train_ds): {len(dls.train_ds)},\
+        \nlen(valid_ds): {len(dls.valid_ds)}''')
 
-print(len(dls.train), len(dls.valid), len(dls.train_ds), len(dls.valid_ds))
-x, y = dls.train.one_batch()
-print('one batch of data:', len(x), len(y), x.shape, y.shape)
-print('items: ', type(dls.items), len(dls.items), dls.items.head())
-dls.show_batch(nrows=1, ncols=3)
+  x, y = dls.train.one_batch()
+  print(f'''\ntrain -> first batch -> x.shape: {x.shape},\
+        \ntrain -> first batch -> y.shape: {y.shape}''')
+
+inspect_dls(dls)
 
 #%% Binary Cross Entropy
 learn = vision_learner(dls, resnet18)
@@ -84,14 +88,15 @@ print(f'''type(x): {type(x)},
 print(f'''x.shape: {x.shape},
       activs.shape: {activs.shape},
       y.shape: {y.shape}''')
-# print(f'''activs: {activs},
-#       y: {y}''')
-# print(f'activs[0]: {activs[0]}')
+print(f'''activs: {activs},
+      y: {y}''')
+print(f'activs[0]: {activs[0]}')
 
-# def binary_cross_entropy(activs, targets):
-#   s = torch.sigmoid(activs)
-#   return -torch.where(targets == 1, s, 1-s).log().mean()
-# binary_cross_entropy(torch.Tensor(activs), torch.Tensor(y))
+def binary_cross_entropy(activs, targets):
+  s = torch.sigmoid(activs)
+  return -torch.where(targets == 1, s, 1-s).log().mean()
+bce_loss = binary_cross_entropy(torch.Tensor(activs), torch.Tensor(y))
+print(f'bce_loss: {bce_loss}')
 
 loss = F.binary_cross_entropy_with_logits(torch.Tensor(activs), torch.Tensor(y))
 print(f'loss: {loss}')
