@@ -217,6 +217,10 @@ class LMModel4(Module):
       self.h = F.relu(self.h_h(self.h + self.i_h(batch[:,i])))
       out.append(self.h_o(self.h))
     self.h = self.h.detach()
+    ## 1. `out` will be a list of length `seq_len`, each item with shape `n_hidden` x `vocab_sz`
+    ##    `y` will be `n_hidden` x `seq_len`
+    ## 2. reshape `out` to be `n_hidden` x `seq_len` x `vocab_sz` shaped tensor before returning it
+    ## 3. `seq_len` = 16, `n_hidden` = 64, `vocab_sz` = 30 in the current case
     return torch.stack(out, dim=1)
 
   def reset(self): self.h = 0
@@ -245,3 +249,27 @@ print(f'pred.shape: {pred.shape}')
 loss_func(pred, b1[1])
 
 learn.fit_one_cycle(15, 3e-3)
+
+#%% 2 layers for the RNN
+class LMModel5(Module):
+  def __init__(self, vocab_sz, n_hidden, num_layers=2):
+    self.i_h = nn.Embedding(vocab_sz, n_hidden)
+    self.rnn = nn.RNN(n_hidden, n_hidden, num_layers, batch_first=True)
+    # self.h_h = nn.Linear(n_hidden, n_hidden)
+    self.h_o = nn.Linear(n_hidden, vocab_sz)
+    self.h = torch.zeros(num_layers, bs, n_hidden)
+
+  def forward(self, batch):
+    out, h = self.rnn(self.i_h(batch), self.h)
+      # self.h = F.relu(self.h_h(self.h + self.i_h(batch[:,i])))
+    out = self.h_o(out)
+    self.h = h.detach()
+    return out
+
+  def reset(self): self.h.zero_()
+
+learn = Learner(dls4, LMModel5(len(vocab), 64, 2), loss_func=CrossEntropyLossFlat(),
+                metrics=accuracy, cbs=ModelResetter)
+learn.fit_one_cycle(15, 3e-3)
+
+#%% Building an LSTM
