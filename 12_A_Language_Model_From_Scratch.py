@@ -132,7 +132,8 @@ class LMModel2(Module):
       h = F.relu(self.h_h(h + self.i_h(batch[:,i])))
     return self.h_o(h)
 
-learn = Learner(dls, model=LMModel1(len(vocab), 64), loss_func=F.cross_entropy, metrics=accuracy)
+#%% fine tune
+learn = Learner(dls, model=LMModel2(len(vocab), 64), loss_func=F.cross_entropy, metrics=accuracy)
 learn.fit_one_cycle(4, 1e-3)
 
 #%% Remember the hidden state for longer
@@ -144,7 +145,6 @@ class LMModel3(Module):
     self.h = 0
 
   def forward(self, batch):
-    out = []
     for i in range(3):
       self.h = F.relu(self.h_h(self.h + self.i_h(batch[:,i])))
     out = self.h_o(self.h)
@@ -153,8 +153,9 @@ class LMModel3(Module):
 
   def reset(self): self.h = 0
 
-learn = Learner(dls, model=LMModel1(len(vocab), 64), loss_func=F.cross_entropy, metrics=accuracy)
-learn.fit_one_cycle(4, 1e-3)
+#%% fine tune
+# learn = Learner(dls, model=LMModel3(len(vocab), 64), loss_func=F.cross_entropy, metrics=accuracy)
+# learn.fit_one_cycle(4, 1e-3)
 
 #%% re-arrange dataset for nlp tasks
 ## First few samples of the first batch of data could be [("This", " . ", "movie"),  " . "],
@@ -194,9 +195,13 @@ train_len = int(len(seqs) * 0.8)
 seqs_train = make_dataset(seqs[:train_len], bs)
 seqs_valid = make_dataset(seqs[train_len:], bs)
 
-print(f'type(seqs): {type(seqs)}, len(seqs): {len(seqs)}, first few: {seqs[:3]}')
-print(f'type(seqs2): {type(seqs_train)}, len(seqs2): {len(seqs_train)},\
-      first: {seqs_train[0]}, 64th: {seqs_train[64]}, 128th: {seqs_train[128]}')
+# print(f'type(seqs): {type(seqs)}, len(seqs): {len(seqs)}, first few: {seqs[:3,:4]}')
+# print(f'type(seqs_train): {type(seqs_train)}, len(seqs_train): {len(seqs_train)},\
+#       first: {seqs_train[0]}, 64th: {seqs_train[64]}, 128th: {seqs_train[128]}')
+
+# def loss_func(preds, targets):
+#   print(f'preds.shape: {preds.shape}, targets.shape: {targets.shape}')
+#   return F.cross_entropy(preds, targets)
 
 dls3 = DataLoaders.from_dsets(seqs_train, seqs_valid, bs=bs, drop_last=True, shuffle=False)
 learn = Learner(dls3, LMModel3(len(vocab), 64), loss_func=F.cross_entropy, metrics=accuracy,
@@ -226,18 +231,22 @@ class LMModel4(Module):
   def reset(self): self.h = 0
 
 seq_len = 16
-seqs = L((tensor(nums[i:i+seq_len]), tensor(nums[i+1:i+seq_len+1])) for i in range(0, len(nums)-seq_len-1, seq_len))
+seqs_16 = L((tensor(nums[i:i+seq_len]), tensor(nums[i+1:i+seq_len+1])) for i in range(0, len(nums)-seq_len-1, seq_len))
 bs = 64
-train_len = int(len(seqs) * 0.8)
-seqs_train = make_dataset(seqs[:train_len], bs)
-seqs_valid = make_dataset(seqs[train_len:], bs)
+train_len = int(len(seqs_16) * 0.8)
+seqs_train = make_dataset(seqs_16[:train_len], bs)
+seqs_valid = make_dataset(seqs_16[train_len:], bs)
 dls4 = DataLoaders.from_dsets(seqs_train, seqs_valid, bs=bs, drop_last=True, shuffle=False)
 
+#%% check one prediction
 def loss_func(preds, targets):
-  ## `preds` will be of shape `n_hidden` x `seq_len` x `vocab_sz`
-  ## `targets` will be of shape `bs` x `vocab_sz` (`bs` is the same as `n_hidden`)
-  # print(f'shape preds: {preds.view(-1, len(vocab)).shape}')
-  # print(f'len target: {len(targets.view(-1))}')
+  ## `preds` will be of shape `n_hidden` x `seq_len` x `vocab_sz`, a 3D tensor
+  ## `targets` will be of shape `bs` x `seq_len`, a 2D tensor (`bs` is the same as `n_hidden`)
+  # print(f'preds.shape after reshaping: {preds.view(-1, len(vocab)).shape}')
+  # print(f'len(target): {len(targets.view(-1))}')
+  # print(f'target.shape after reshaping: {targets.view(-1).shape}')
+  ## `preds` will be shaped to (`n_hidden` * `seq_len`) x `vocab_sz`, a 2D tensor
+  ## `targets` will be shaped to (`bs` * `seq_len`) x 1, a 1D tensor
   return F.cross_entropy(preds.view(-1, len(vocab)), targets.view(-1))
 
 learn = Learner(dls4, LMModel4(len(vocab), 64), loss_func=loss_func, metrics=accuracy,
@@ -248,6 +257,7 @@ pred = learn.model(dls4.one_batch()[0])
 print(f'pred.shape: {pred.shape}')
 loss_func(pred, b1[1])
 
+#%% fine tune
 learn.fit_one_cycle(15, 3e-3)
 
 #%% 2 layers for the RNN
@@ -273,3 +283,48 @@ learn = Learner(dls4, LMModel5(len(vocab), 64, 2), loss_func=CrossEntropyLossFla
 learn.fit_one_cycle(15, 3e-3)
 
 #%% Building an LSTM
+class LSTMCell(Module):
+  def __init__(self, ni, nh, num_layers=1):
+    self.forget_gate = nn.Linear(ni+nh, nh)
+    self.input_gate = nn.Linear(ni+nh, nh)
+    self.cell_gate = nn.Linear(ni+nh, nh)
+    self.output_gate = nn.Linear(ni+nh, nh)
+
+  def forward(self, input, state):
+    hidden_state, cell_state = state
+    hidden_state = torch.stack([hidden_state, input], dim=1)
+    #1
+    forget_nn = torch.sigmoid(self.forget_gate(hidden_state))
+    cell_state = cell_state * forget_nn
+    #2
+    input_nn = torch.sigmoid(self.input_gate(hidden_state))
+    cell_nn = torch.tanh(self.cell_gate(hidden_state))
+    cell_state = cell_state + (input_nn * cell_nn)
+    #3
+    output_nn = torch.sigmoid(self.output_gate(hidden_state))
+    hidden_state = output_nn * torch.tanh(cell_state)
+    return hidden_state, (hidden_state, cell_state)
+
+class LMModel6(nn.Module):
+  def __init__(self, vocab_sz, n_input, n_hidden, bs, num_layers):
+    super().__init__()
+    self.i_h = nn.Embedding(vocab_sz, n_input)
+    self.lstm = nn.LSTM(n_input, n_hidden, num_layers, batch_first=True)
+    self.h_o = nn.Linear(n_hidden, vocab_sz)
+    self.hidden_state = torch.Tensor(num_layers, bs, n_hidden)
+    self.cell_state = torch.zeros(num_layers, bs, n_hidden)
+
+  def forward(self, batch):
+    h = self.i_h(batch)
+    res, (h, c) = self.lstm(h, (self.hidden_state, self.cell_state))
+    self.hidden_state = h.detach()
+    self.cell_state = c.detach()
+    return self.h_o(res)
+
+  def reset(self):
+    self.hidden_state.zero_()
+    self.cell_state.zero_()
+
+learn = Learner(dls4, model=LMModel6(len(vocab), 64 ,64, 64, 2), loss_func=CrossEntropyLossFlat(),
+                metrics=accuracy, cbs=ModelResetter)
+learn.fit_one_cycle(15, 1e-2)
