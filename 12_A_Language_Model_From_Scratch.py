@@ -292,6 +292,13 @@ class LSTMCell(Module):
 
   def forward(self, input, state):
     hidden_state, cell_state = state
+    ## Following doesn't work in its current state
+    ## Maybe we need to iterate `seq_len` number of times using code similar to:
+    ## for i in range(16):
+       # hidden_state = torch.stack([hidden_state, input[:,i]])
+       # forget_nn = torch.sigmoid()
+       # ...
+    ## where 16 = `seq_len` of `input`
     hidden_state = torch.stack([hidden_state, input], dim=1)
     #1
     forget_nn = torch.sigmoid(self.forget_gate(hidden_state))
