@@ -2,9 +2,7 @@
 import torch as t
 import altair as alt
 xx = t.arange(start=0, end=5)
-# x2 = t.arange(start=0, end=15)
 yy = (27 * xx) + 37
-# y = (7 * x1) + (22 * x2) + 3
 
 import pandas as pd
 data = pd.DataFrame({'x': xx,
@@ -16,22 +14,21 @@ chart_x_y = alt.Chart(data).mark_point().encode(
 chart_x_y
 
 #%% loss function
-def mse(preds, labels):
-  return t.mean((preds - labels) ** 2)
+def mse(preds, y):
+  return t.mean((preds - y) ** 2)
 
 #%% model
 def linear_reg(x, W, b):
-  preds = (W * x) + b
-  # print(f'pred: {preds}')
-  return (W * x) + b
+  return t.matmul(x,  W) + b
 
 #%% trainer
 def train(x, y, W, b, num_epochs, lr, dbg):
   def _print_dbg():
+    print('++++++++++++++++++++++++++++++++++++++++++++++++')
     print(f'epoch: {epoch}')
     print(f'y: {y}')
-    print(f'W.grad: {W.grad}, b.grad: {b.grad}')
     print(f'W: {W}, b: {b}')
+    print(f'W.grad: {W.grad}, b.grad: {b.grad}')
     print(f'loss: {loss}')
 
   losses = []
@@ -50,7 +47,7 @@ def train(x, y, W, b, num_epochs, lr, dbg):
 #%% driver function
 def driver(x, y, epochs, lr, dbg=False, prt_summary=True):
   g = t.Generator().manual_seed(42)
-  W = t.randn(1, generator=g, requires_grad=True)
+  W = t.randn(2, 1, generator=g, requires_grad=True)
   b = t.randn(1, generator=g, requires_grad=True)
 
   lossesf, Wf, bf = train(x, y, W, b, epochs, lr, dbg)
@@ -83,20 +80,38 @@ def plot_x_y_preds(x, y, W, b):
   return chart_x_y + chart_x_preds
 
 def plot_epochs_losses(epochs, losses, last_iters=0):
-  i = len(epochs) if last_iters == 0 else last_iters
+  i = epochs if last_iters == 0 else last_iters
   return alt.Chart(pd.DataFrame({'epoch': range(epochs)[-i:],
                                           'losses': losses[-i:]})).mark_line().encode(
                                             x='epoch:Q',
                                             y='losses:Q')
 
-#%% main
-x = t.arange(start=0, end=5)
-y = (27 * x) + 37
-epochs = 200
-lossesf, Wf, bf = driver(x, y, epochs, lr=0.1)
+#%% single input
+# TODO: Fix this code for new version of linear_reg model with matrix multiplication
+x1 = t.arange(start=0, end=5)
+y1 = (27 * x1) + 5
+epochs = 10
+# lossesf, Wf, bf = driver(x1, y1, epochs, lr=0.1, dbg=True)
 
+#%% two inputs
+## If you pick wildly different ranges for x2's first and second columns, there's a big
+## difference in their corresponding W.grad gradients and it's hard for loss to converge to
+## a minimum
+x2 = t.stack([t.arange(start=0, end=5), t.arange(start=10, end=15)], dim=1).float()
+y2 = t.unsqueeze((7 * x2[:,0]) + (22 * x2[:,1]) + 3, dim=1).float()
+epochs = 200
+# W = t.randn(2, 1)
+# print(f'x2: {x2}, y2: {y2}, W: {W}')
+## loss gets really big with a bigger learning rate e.g. lr=0.01 for 10 samples
+## try lr=0.001 for 10 samples and lr=0.0005 for 25 samples
+lossesf, Wf, bf = driver(x2, y2, epochs, lr=0.001, dbg=False)
+
+# x2 = t.arange(start=0, end=15)
+# y = (7 * x1) + (22 * x2) + 3
+
+#%% plots
 # plot_x_y_preds(x, y, Wf, bf)
-plot_epochs_losses(epochs, lossesf, 20)
+plot_epochs_losses(epochs, lossesf, 50)
 
 #%% does it matter if we run a few more training loops with lower learning rate
 # epochs = 5000
