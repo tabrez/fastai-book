@@ -8,53 +8,69 @@ def mse(preds, y):
   return t.mean((preds - y) ** 2)
 
 #%% model
-def linear_reg(x, W, b):
-  return t.matmul(x,  W) + b
+def module(n):
+  g = t.Generator().manual_seed(42)
+  W = t.randn(n, 1, generator=g, requires_grad=True)
+  def linear_reg(x):
+    return t.matmul(x,  W[:-1]) + W[-1]
+  def params():
+    return W
+  return linear_reg, params
+
+#%% optimizer
+def optimizer(params, lr):
+  def step():
+      params.data -= (params.grad.data * lr)
+  def zero():
+      params.grad.zero_()
+  return step, zero
 
 #%% trainer
-def train(x, y, W, b, epochs, lr, dbg=False):
+def train(x, y, m, opt, epochs, dbg=False):
   def _print_dbg():
     print('++++++++++++++++++++++++++++++++++++++++++++++++')
     print(f'epoch: {epoch}')
-    # print(f'y: {y}')
-    print(f'W: {W}, b: {b}')
-    # print(f'W.grad: {W.grad}, b.grad: {b.grad}')
-    # print(f'loss: {loss}')
+    print(f'y: {y}')
+    print(f'W: {params()}')
+    print(f'W.grad: {params().grad}')
+    print(f'loss: {loss}')
 
+  learn, params = m
+  step, zero = opt
   losses = []
   for epoch in range(epochs):
-    preds = linear_reg(x, W, b)
+    preds = learn(x)
     loss = mse(preds, y)
     losses.append(loss.item())
     loss.backward()
     if dbg: _print_dbg()
-    W.data = W.data - (W.grad.data * lr)
-    b.data = b.data - (b.grad.data * lr)
-    W.grad.zero_()
-    b.grad.zero_()
-  return losses, W, b
+    step()
+    zero()
+  return losses
 
 #%% driver function
-def driver(x, y, epochs, lr, dbg=False, prt_summary=True):
-  g = t.Generator().manual_seed(42)
-  W = t.randn(2, 1, generator=g, requires_grad=True)
-  b = t.randn(1, generator=g, requires_grad=True)
+def driver(x, y, m, epochs, lr, dbg=False, prt_summary=True):
+  # b = t.randn(1, generator=g, requires_grad=True)
 
-  lossesf, Wf, bf = train(x, y, W, b, epochs, lr, dbg)
+  learn, params = m
+  opt = optimizer(params(), lr)
+  lossesf = train(x, y, m, opt, epochs, dbg)
   if prt_summary:
     print('training done')
     print('===================final results:===================')
-    print(f'loss: {lossesf[-1]}, Wf: {Wf}, bf: {bf}')
-  if False:
+    print(f'loss: {lossesf[-1]}')
+    print(f'params: {params()}')
+  if dbg:
     print(f'labels: {y}')
-    preds = linear_reg(x, Wf, bf)
+    preds = learn(x)
     print(f'preds: {preds}')
     print(f'(preds - y): {preds - y}')
-  return lossesf, Wf, bf
+  return lossesf
 
 #%% plot input vs y and input vs predictions using final values of model parameters
-def plot_x_y_preds(x, y, W, b):
-  preds = linear_reg(x, W, b)
+def plot_x_y_preds(x, y):
+  learn, params = module(3)
+  preds = learn(x)
   data_x_y = pd.DataFrame({'x': x,
                       'y': y})
   chart_x_y = alt.Chart(data_x_y).mark_point().encode(
@@ -77,8 +93,8 @@ def plot_epochs_losses(epochs, losses, last_iters=5000):
                                             y='losses:Q')
 
 #%% two inputs
-x2 = t.stack([t.arange(start=0, end=95), t.arange(start=50, end=145)], dim=1).float()
-y2 = t.unsqueeze((177 * x2[:,0]) + (22 * x2[:,1]) + 54, dim=1).float()
+x2 = t.stack([t.arange(start=0, end=95), t.arange(start=50, end=145), t.arange(start=200, end=295)], dim=1).float()
+y2 = t.unsqueeze((177 * x2[:,0]) + (22 * x2[:,1]) + (71 * x2[:,2]) + 54, dim=1).float()
 
 ## If you pick wildly different ranges for x2's first and second columns, there's a big
 ## difference in their corresponding W.grad gradients and it's hard for loss to converge to
@@ -92,10 +108,11 @@ y2 = t.unsqueeze((177 * x2[:,0]) + (22 * x2[:,1]) + 54, dim=1).float()
 
 
 # print(f'x2: {x2}, y2: {y2}')
-epochs = 550
+epochs = 950
 ## loss gets really big with a bigger learning rate e.g. lr=0.0001 for 10 samples
 ## try lr=0.0001 for 10 samples and lr=0.00005 for 25 samples
-lossesf, Wf, bf = driver(x2, y2, epochs, lr=0.0005, dbg=True, prt_summary=True)
+m = module(4)
+lossesf = driver(x2, y2, m, epochs, lr=0.000005, prt_summary=True)
 
 # x2 = t.arange(start=0, end=15)
 # y = (7 * x1) + (22 * x2) + 3

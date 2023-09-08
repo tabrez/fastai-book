@@ -114,7 +114,7 @@ y = (27 * x) + 73
 # Change lr=0.1 to see jagged change in parameters but eventually smooth out with increased num_epochs value
 # Change lr=0.2 to see parameters never converge to their correct values.
 epochs = 50
-lossesf, Wf, bf, Ws, bs = driver(x, y, epochs, lr=0.01)
+lossesf, Wf, bf, Ws, bs = driver(x, y, epochs, lr=0.0G1)
 
 # plot_x_y_preds(x, y, Wf, bf)
 upper = plot_epochs_vs(epochs, Ws, 'W') | \
