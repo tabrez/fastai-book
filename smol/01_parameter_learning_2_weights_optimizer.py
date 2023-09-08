@@ -69,7 +69,7 @@ def driver(x, y, m, epochs, lr, dbg=False, prt_summary=True):
 
 #%% plot input vs y and input vs predictions using final values of model parameters
 def plot_x_y_preds(x, y):
-  learn, params = module(3)
+  learn, _ = module(3)
   preds = learn(x)
   data_x_y = pd.DataFrame({'x': x,
                       'y': y})
@@ -92,31 +92,34 @@ def plot_epochs_losses(epochs, losses, last_iters=5000):
                                             x='epoch:Q',
                                             y='losses:Q')
 
-#%% two inputs
+#%% three inputs
 x2 = t.stack([t.arange(start=0, end=95), t.arange(start=50, end=145), t.arange(start=200, end=295)], dim=1).float()
 y2 = t.unsqueeze((177 * x2[:,0]) + (22 * x2[:,1]) + (71 * x2[:,2]) + 54, dim=1).float()
-
-## If you pick wildly different ranges for x2's first and second columns, there's a big
-## difference in their corresponding W.grad gradients and it's hard for loss to converge to
-## a minimum, normalise the columns if possible:
-# mean = t.mean(x2, dim=0)
-# std = t.std(x2, dim=0)
-# x2 = (x2 - mean) / std
-## Use a larger learning rate after normalising
-## Currently, the parameters learned are wildly incorrect with above normalisation while
-## the loss is really small
-
-
-# print(f'x2: {x2}, y2: {y2}')
-epochs = 950
 ## loss gets really big with a bigger learning rate e.g. lr=0.0001 for 10 samples
 ## try lr=0.0001 for 10 samples and lr=0.00005 for 25 samples
-m = module(4)
-lossesf = driver(x2, y2, m, epochs, lr=0.000005, prt_summary=True)
+model = module(4)
+epochs = 950
+lossesf = driver(x2, y2, model, epochs, lr=5e-6, prt_summary=True)
 
-# x2 = t.arange(start=0, end=15)
-# y = (7 * x1) + (22 * x2) + 3
+# plot_x_y_preds(x, y)
+# first few losse are huge, so skip them
+plot_epochs_losses(epochs-5, lossesf[5:])
 
-# plot_x_y_preds(x, y, Wf, bf)
-#%%
-plot_epochs_losses(epochs, lossesf)
+#%% better synthetic data
+t.manual_seed(0)
+true_params = t.tensor([177., 22., 71., 54.])
+
+n_samples = 95
+n_features = 3
+mean = t.zeros(n_features)
+cov = t.eye(n_features)
+X = t.distributions.MultivariateNormal(mean, cov).sample((n_samples,))
+X_bias = t.cat((X, t.ones(n_samples, 1)), dim=1)
+
+noise = t.normal(0, 10, (n_samples,))
+y = t.matmul(X_bias, true_params) + noise
+y = y.view(-1, 1)
+
+model = module(4)
+epochs = 950
+lossesf = driver(X, y, model, epochs, lr=.1, prt_summary=True)
