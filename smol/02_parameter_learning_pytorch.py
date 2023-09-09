@@ -1,38 +1,62 @@
-
-#%% imports
-import torch as t
-import altair as alt
-import pandas as pd
-
 #%% same program using pytorch library
-true_params = t.tensor([177., 22., 71., 54.])
+import torch as t
+class LinearRegression(t.nn.Module):
+    def __init__(self, n_features, n_outputs):
+        super(LinearRegression, self).__init__()
+        self.linear = t.nn.Sequential(
+          # try different number of activations below: 1, 2, 3, 10
+          # loss is good on some runs but not the others with lower numbers like 1, 2 - why?
+          # Try with fixed seed for parameters created by nn.LinearRegression
+          t.nn.Linear(n_features, 3),
+          t.nn.ReLU(),
+          t.nn.Linear(3, n_outputs))
 
-n_features = 3
-n_outputs = 1
-model = t.nn.Linear(n_features, n_outputs)
-mse_loss = t.nn.MSELoss()
-optimizer = t.optim.SGD(model.parameters(), lr=.1)
+    def forward(self, x):
+        return self.linear(x)
 
-n_samples = 95
+def driver(n_epochs=10, lr=0.1):
+  model = LinearRegression(3, 1)
+  mse_loss = t.nn.MSELoss()
+  optimizer = t.optim.SGD(model.parameters(), lr)
 
-mean = t.zeros(n_features)
-cov = t.eye(n_features)
-X = t.distributions.MultivariateNormal(mean, cov).sample((n_samples,))
-X_bias = t.cat((X, t.ones(n_samples, 1)), dim=1)
+  # x1 = t.linspace(start=-1, end=1, steps=90).view(-1, 1).float()
+  x1 = t.randn(90).view(-1, 1)
+  x2 = x1*x1
+  x3 = x1*x1*x1
+  y = (122 * x1) + 73 * x2 + 12 * x3 + 12
+  # print(f'y: {y}')
+  # y_mean = y.mean()
+  # y_std = y.std()
+  # y = (y - y_mean) / y_std
+  print(f'y: {y}')
 
-noise = t.normal(0, 10, (n_samples,))
-y = t.matmul(X_bias, true_params) + noise
-y = y.view(-1, 1)
+  for epoch in range(n_epochs):
+      y_pred = model(t.cat((x1, x2, x3), dim=1))
+      loss = mse_loss(y_pred, y)
 
-n_epochs = 1000
-for epoch in range(n_epochs):
-    y_pred = model(X)
-    loss = mse_loss(y_pred, y)
+      if (epoch + 1) % 10 == 0:
+          print(f'params: {list(model.parameters())}')
+          print(f'grads: {[p.grad for p in model.parameters()]}')
+          print(f'Epoch: {epoch + 1}/{n_epochs}, Loss: {loss.item():.4f}')
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+      optimizer.zero_grad()
+      loss.backward()
+      optimizer.step()
 
-    if (epoch + 1) % 100 == 0:
-        print(f'Epoch: {epoch + 1}/{n_epochs}, Loss: {loss.item():.4f}')
+  return loss, model
+
+lossf, model = driver(950, 0.0001)
+print('++++++++++++++++++++++++++++++++++++++++++++++')
+print(f'final loss: {lossf}')
 print(f'params: {list(model.parameters())}')
+# print(f'grads: {[p.grad for p in model.parameters()]}')
+
+#%%
+x1 = 0.3
+x2 = x1*x1
+x3 = x1*x1*x1
+new_y = (122 * x1) + 73 * x2 + 12 * x3 + 12
+# new_y = 122 * 0.3 + 73 * 0.09 + 12 * 0.027 + 12
+print(f'new_y: {new_y}')
+pred_y = model(t.tensor([x1, x2, x3]))
+print(f'pred_y: {pred_y}')
