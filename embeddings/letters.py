@@ -1,19 +1,23 @@
 #%% import packages
-import string
-from collections import Counter
-from torch import nn
-import torch.nn.functional as F
-import torch
-from torch.utils.data import TensorDataset, DataLoader
-import time
 import datetime
 import re
+import time
+from collections import Counter
+
+import altair as alt
+import pandas as pd
+import torch
+import torch.nn.functional as F
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+
 
 #%% prepare some raw text with only lower case letters, digits and underscore
 def make_text(filename):
   with open(filename, 'r') as file:
     text = file.read()
-  return re.sub('[^a-zA-Z0-9 ]', '', text).lower()
+  text = re.sub('[^a-zA-Z0-9 ]', '', text).lower()
+  return text.replace(' ', '_')
 
 text = make_text('rod_steiger.txt')
 print(f'len of text: {len(text)}, text[:20]: {text[:20]}')
@@ -66,8 +70,8 @@ class TrainEmbeddings(nn.Module):
     return res.view(len(x), -1)
 
 # device = ("cuda" if torch.cuda.is_available() else "cpu")
-device = 'cuda'
-def train(dl, model, loss_fn, optimizer, epoch):
+device = 'cpu'
+def train(dl, model, loss_fn, optimizer):
   for batch, (X, y) in enumerate(dl):
     X, y = X.to(device), y.to(device)
 
@@ -79,32 +83,30 @@ def train(dl, model, loss_fn, optimizer, epoch):
     loss.backward()
     optimizer.step()
 
-    if epoch % 10 == 0:
-      print(f'loss: {loss.item()}')
+    if batch % 100 == 0:
+      print(f'batch: {batch}/{len(dl)}, loss: {loss.item()}')
 
 #%%
 # Create a dataloader in a shape that works with pytorch trainer
 tds = TensorDataset(torch.tensor(ds['input']), torch.tensor(ds['output']))
-dl = DataLoader(tds, batch_size=1)
+dl = DataLoader(tds, batch_size=256)
 # 3. Create a learner/model object that can be trained on the above dataloader
 model = TrainEmbeddings(len(vocab),
                         embed_size=2,
                         seq_len=sequence_length,
-                        hidden_nodes=30).to(device)
+                        hidden_nodes=30)
+model = model.to(device)
 # 4. Create a suitable optimizer & a loss function
 loss_fn = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=5e-4)
+optimizer = torch.optim.SGD(model.parameters(), lr=1)
 
 epochs = 10
 start = time.time()
 for i in range(epochs):
   print(f'Epoch {i}=======================')
-  train(dl, model, loss_fn, optimizer, epoch=i)
+  train(dl, model, loss_fn, optimizer)
 print(f'Training took {str(datetime.timedelta(seconds=time.time() - start))}.')
 
-#%%
-import pandas as pd
-import altair as alt
 embeddings = list(model.parameters())[0]
 print(f'len of embeddings: {len(embeddings)}, embeddings: {embeddings[:5]}')
 
@@ -120,51 +122,4 @@ scatter.mark_text(align='left', baseline='middle', dx=7).encode(
   text='label'
 )
 
-#%% How nn.CrossEntropyLoss() works
-## https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-import torch
-loss_fn = nn.CrossEntropyLoss()
-input = torch.randn(3, 5, requires_grad=True)
-target = torch.empty(3, dtype=torch.long).random_(5)
-loss = loss_fn(input, target)
-print(f'input: {input}, \ntarget: {target}, \nloss: {loss}')
-
-#%% How TensorDataset works
-print(f'len of ds.input: {len(ds["input"])}, len of ds.output: {len(ds["output"])}')
-tds = TensorDataset(torch.tensor(ds['input']), torch.tensor(ds['output']))
-print(f'len tds: {len(tds)}, tds[0:3]: {tds[0:3]}')
-print(f'{torch.tensor([1,2,3])}')
-
-#%% flatten a tensor list
-t = torch.rand([1, 5, 2])
-print(f't.shape: {t.shape}, t: {t}')
-print(f't.unstack(): {t.view(-1)}')
-
-#%% create the dataset - version 1
-def make_ds1(text):
-  ds1 = []
-  # First few elements are not present in the input and last element is not present in the output
-  # alternatively add dummy elements at the start and the end of the text
-  for i in range(len(text)-1):
-    pair = (text[i], text[i+1])
-    ds1.append(pair)
-
-ds1 = make_ds1(text)
-print(f'len of ds1: {len(ds1)}, firt few: {ds1[:5]}')
-
-#%% create the dataset - version 2
-def make_ds2(text):
-  ds2 = { 'input': [], 'output': []}
-  for i in range(len(text)-1):
-    ds2['input'].append(text[i])
-    ds2['output'].append(text[i+1])
-
-ds2 = make_ds2(text)
-print(f'len of input: {len(ds2["input"])}, len of output: {len(ds2["output"])}')
-
-#%% make_text()
-  # text = text.lower()
-  # # print(text[:40])
-  # table = str.maketrans('\n\t -ˈ—éəɪɡ–', '___________', string.punctuation)
-  # text = text.translate(table)
-  # return text
+# %%
