@@ -52,7 +52,8 @@ class TrainEmbeddings(nn.Module):
     super().__init__()
     self.embeddings = nn.Embedding(vocab_size, embed_size)
     self.layer1 = nn.Linear(embed_size * seq_len, hidden_nodes)
-    self.layer2 = nn.Linear(hidden_nodes, hidden_nodes)
+    # self.layer2 = nn.Linear(hidden_nodes, hidden_nodes)
+    # self.layer3 = nn.Linear(hidden_nodes, hidden_nodes)
     self.output = nn.Linear(hidden_nodes, vocab_size)
     self.debug = True
 
@@ -63,7 +64,8 @@ class TrainEmbeddings(nn.Module):
     res = res.view(len(x), -1)
     # if self.debug: print(f'res 1: {res}')
     res = F.relu(self.layer1(res))
-    res = F.relu(self.layer2(res))
+    # res = F.relu(self.layer2(res))
+    # res = F.relu(self.layer3(res))
     res = self.output(res)
     # if self.debug: print(f'res 3: {res}')
     self.debug = False
@@ -88,38 +90,45 @@ def train(dl, model, loss_fn, optimizer):
 
 #%%
 # Create a dataloader in a shape that works with pytorch trainer
-tds = TensorDataset(torch.tensor(ds['input']), torch.tensor(ds['output']))
-dl = DataLoader(tds, batch_size=256)
-# 3. Create a learner/model object that can be trained on the above dataloader
-model = TrainEmbeddings(len(vocab),
-                        embed_size=2,
-                        seq_len=sequence_length,
-                        hidden_nodes=30)
-model = model.to(device)
-# 4. Create a suitable optimizer & a loss function
-loss_fn = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=1)
+def driver():
+  tds = TensorDataset(torch.tensor(ds['input']), torch.tensor(ds['output']))
+  dl = DataLoader(tds, batch_size=256)
+  # 3. Create a learner/model object that can be trained on the above dataloader
+  model = TrainEmbeddings(len(vocab),
+                          embed_size=2,
+                          seq_len=sequence_length,
+                          hidden_nodes=5)
+  model = model.to(device)
+  # 4. Create a suitable optimizer & a loss function
+  loss_fn = nn.CrossEntropyLoss()
+  optimizer = torch.optim.SGD(model.parameters(), lr=1)
 
-epochs = 10
-start = time.time()
-for i in range(epochs):
-  print(f'Epoch {i}=======================')
-  train(dl, model, loss_fn, optimizer)
-print(f'Training took {str(datetime.timedelta(seconds=time.time() - start))}.')
+  epochs = 10
+  start = time.time()
+  for i in range(epochs):
+    print(f'Epoch {i}=======================')
+    train(dl, model, loss_fn, optimizer)
+  print(f'Training took {str(datetime.timedelta(seconds=time.time() - start))}.')
+  return model
 
-embeddings = list(model.parameters())[0]
-print(f'len of embeddings: {len(embeddings)}, embeddings: {embeddings[:5]}')
+def plot_embeddings(model):
+  embeddings = list(model.parameters())[0]
+  print(f'len of embeddings: {len(embeddings)}, embeddings: {embeddings[:5]}')
 
-df = pd.DataFrame(embeddings.cpu().detach().numpy(), columns=['x', 'y'])
-df['label'] = vocab
+  df = pd.DataFrame(embeddings.cpu().detach().numpy(), columns=['x', 'y'])
+  df['label'] = vocab
 
-scatter = alt.Chart(df).mark_circle().encode(
-  x='x',
-  y='y'
-).interactive()
+  scatter = alt.Chart(df).mark_circle().encode(
+    x='x',
+    y='y'
+  ).interactive()
 
-scatter.mark_text(align='left', baseline='middle', dx=7).encode(
-  text='label'
-)
+  return scatter.mark_text(align='left', baseline='middle', dx=7).encode(
+    text='label'
+  )
+
+model = driver()
+plot_embeddings(model)
+
 
 # %%
