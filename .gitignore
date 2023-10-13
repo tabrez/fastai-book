@@ -1,7 +1,10 @@
 fastbook-min/
-.menv/
+.venv/
 data/
 saves/
 tmp/
 id_ed*
+__pycache__/
+python=3.12/
+
 

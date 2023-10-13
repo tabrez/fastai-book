@@ -52,25 +52,30 @@ def make_dataset(vocab, text, sequence_length):
 
 #%% neural network using pytorch
 class TrainEmbeddings(nn.Module):
-  def __init__(self, vocab_size, embed_size, seq_len, hidden_nodes):
+  def __init__(self, vocab_size, embed_size, bs, hidden_nodes):
     super().__init__()
     self.embeddings = nn.Embedding(vocab_size, embed_size)
-    # self.layer1 = nn.Linear(embed_size * seq_len, hidden_nodes)
-    self.output = nn.Linear(embed_size * seq_len, vocab_size)
+    self.lstm = nn.LSTM(embed_size, hidden_nodes, batch_first=True)
+    self.output = nn.Linear(hidden_nodes, vocab_size)
+    self.hidden_state = torch.Tensor(1, bs, hidden_nodes)
+    self.cell_state = torch.Tensor(1, bs, hidden_nodes)
     self.debug = False
 
   def forward(self, x):
-    if self.debug: print(f'x: {x}')
-    ## exercise: try F.relu(self.embeddings), does it improve the results or make it worse
     res = self.embeddings(x)
     if self.debug: print(f'res after embeddings layer: {res}')
-    res = res.view(len(x), -1)
-    if self.debug: print(f'res after view change: {res}')
-    # res = F.relu(self.layer1(res))
+    res, (h, c) = self.lstm(res, (self.hidden_state, self.cell_state))
+    if self.debug: print(f'res after lstm layer: {res}')
+    self.hidden_state = h.detach()
+    self.cell_state = c.detach()
     res = self.output(res)
     if self.debug: print(f'res after output layer: {res}')
     self.debug = False
-    return res
+    return res.view(len(x), -1)
+
+  def reset(self):
+    self.hidden_state.zero_()
+    self.cell_state.zero_()
 
 #%% trainer
 def train(dl, model, loss_fn, optimizer):
@@ -92,20 +97,37 @@ def train(dl, model, loss_fn, optimizer):
       print(f'batch: {batch}/{len(dl)}, loss: {loss.item()}')
   return model, optimizer
 
+#%% re-arrange dataset for sequential processing by LSTM
+def rearrange_dataset(ds, bs):
+  # print('len(ds), bs:', len(ds['input']), bs)
+  # print('ds before:', ds['input'][:3])
+  num_batches = int(len(ds['input'])/bs)
+  print('number of batches,', num_batches)
+  res = {'input': [], 'output': []}
+  for i in range(num_batches):
+    # print('first loop')
+    for j in range(bs):
+      # print('i, j', i, j)
+      res['input'].append(ds['input'][i+(j*num_batches)])
+      res['output'].append(ds['output'][i+(j*num_batches)])
+  # print('ds after:', res['input'][:3])
+  return res
+
 #%% training loop
 def train_loop(vocab, text, batch_size, embed_size, seq_len, hidden_nodes, lr, epochs):
   # device = ("cuda" if torch.cuda.is_available() else "cpu")
   device = 'cpu'
 
   # 1. Create a dataloader in a shape that works with pytorch trainer
-  ds = make_dataset(vocab, text, sequence_length)
+  ds = make_dataset(vocab, text, seq_len)
+  ds = rearrange_dataset(ds, batch_size)
   tensor_ds = TensorDataset(torch.tensor(ds['input']), torch.tensor(ds['output']))
   dl = DataLoader(tensor_ds, batch_size=batch_size)
 
   # 2. Create a learner/model object that can be trained on the above dataloader
   model = TrainEmbeddings(len(vocab),
                           embed_size=embed_size,
-                          seq_len=seq_len,
+                          bs=batch_size,
                           hidden_nodes=hidden_nodes)
   model = model.to(device)
 
@@ -120,8 +142,7 @@ def train_loop(vocab, text, batch_size, embed_size, seq_len, hidden_nodes, lr, e
     model, optimizer = train(dl, model, loss_fn, optimizer)
   print(f'Training took {str(datetime.timedelta(seconds=time.time() - start))}.')
   return plot_embeddings(model, vocab)
-
-#%% plot 2D embeddings
+True
 def plot_embeddings(model, vocab):
   embeddings = list(model.parameters())[0]
   print(f'len of embeddings: {len(embeddings)}, few embeddings: {embeddings[:6]}')
@@ -149,6 +170,6 @@ train_loop(vocab=vocab,
             seq_len=sequence_length,
             hidden_nodes=5,
             lr=5,
-            epochs=4)
+            epochs=8)
 
 # %%
