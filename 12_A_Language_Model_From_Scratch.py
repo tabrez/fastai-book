@@ -180,8 +180,7 @@ class LMModel3(Module):
 # seqs2
 ## remaining data from last, incomplete batch is discarded
 
-##% implement above functionality on seqs
-
+#%% implement above functionality on seqs
 def make_dataset(seqs, bs):
   num_batches = int(len(seqs)/bs)
   res = []
