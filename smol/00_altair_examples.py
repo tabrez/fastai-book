@@ -166,11 +166,6 @@ def update_plot(m, b):
     y = m * x + b
     plt.plot(x, y)
 
-    # Scatter plot with x2 and y2
-    x2 = np.linspace(-100, 100, 100)
-    y2 = 11 * x2 + 1123 + np.random.normal(0, 200, len(x2))
-    plt.scatter(x2, y2, color='blue', label='Scatter Plot')
-
     plt.xlabel('x')
     plt.ylabel('y')
     plt.title('Line: y = {}x + {}'.format(m, b))
@@ -180,5 +175,55 @@ def update_plot(m, b):
     plt.legend()
     plt.show()
 
+# Scatter plot with x2 and y2
+x2 = np.linspace(-100, 100, 100)
+y2 = 11 * x2 + 1123 + np.random.normal(0, 200, len(x2))
+plt.scatter(x2, y2, color='blue', label='Scatter Plot')
+
 interact(update_plot, m=FloatSlider(min=-5.0, max=15.0, step=1, value=1.0),
+         b=FloatSlider(min=-150, max=150, step=1, value=0.0))
+
+#%%
+import numpy as np
+import matplotlib.pyplot as plt
+from ipywidgets import interact, FloatSlider
+
+x = np.linspace(-100, 100, 100)
+y = 1 * x + 0
+
+# Scatter plot with x2 and y2
+x2 = np.linspace(-100, 100, 100)
+y2 = 9 * x2 + 23
+
+# Add random noise to y2
+noise = np.random.normal(0, 10, len(y2))
+y2_with_noise = y2 + noise
+
+plt.plot(x, y)
+plt.scatter(x2, y2_with_noise, color='red', label='Scatter Plot')
+
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Line: y = 1x + 0')
+plt.grid(True)
+plt.ylim(-100, 100)
+plt.xlim(-100, 100)
+plt.legend()
+plt.show()
+
+def update_plot(m, b):
+    plt.clf()  # Clear the previous plot
+    plt.plot(x, y)
+    plt.scatter(x2, y2_with_noise, color='red', label='Scatter Plot')
+
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Line: y = {}x + {}'.format(m, b))
+    plt.grid(True)
+    plt.ylim(-100, 100)
+    plt.xlim(-100, 100)
+    plt.legend()
+    plt.show()
+
+interact(update_plot, m=FloatSlider(min=-5.0, max=15.0, step=0.1, value=1.0),
          b=FloatSlider(min=-150, max=150, step=1, value=0.0))
